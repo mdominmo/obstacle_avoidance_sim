@@ -1,0 +1,23 @@
+- gz_topic_name: "/world/${WORLD_NAME}/model/${GZ_MODEL_INSTANCE}/link/rangefinder_front_link/sensor/rangefinder_front/scan"
+  ros_topic_name: "/rangefinder/front"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- gz_topic_name: "/world/${WORLD_NAME}/model/${GZ_MODEL_INSTANCE}/link/rangefinder_back_link/sensor/rangefinder_back/scan"
+  ros_topic_name: "/rangefinder/back"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- gz_topic_name: "/world/${WORLD_NAME}/model/${GZ_MODEL_INSTANCE}/link/rangefinder_left_link/sensor/rangefinder_left/scan"
+  ros_topic_name: "/rangefinder/left"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- gz_topic_name: "/world/${WORLD_NAME}/model/${GZ_MODEL_INSTANCE}/link/rangefinder_right_link/sensor/rangefinder_right/scan"
+  ros_topic_name: "/rangefinder/right"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS

@@ -1,0 +1,11 @@
+output/*.sdf
+output/*.png
+output/bridge_config.yaml
+
+gz_procedural_worlds/px4-sitl-docker-sim/gz_assets/
+
+__pycache__/
+*.py[cod]
+
+.DS_Store
+*~
