@@ -1,25 +1,23 @@
 # obstacle_avoidance_sim
 
-Entorno de simulación para evaluar algoritmos de evasión de obstáculos en drones. Genera mundos procedurales en Gazebo Harmonic, simula un dron PX4 (x500) equipado con 4 telémetros (front/back/left/right) y expone sus mediciones como topics ROS2 mediante un bridge, todo orquestado con Docker.
+Simulation environment for testing obstacle avoidance algorithms on drones. It generates procedural worlds in Gazebo Harmonic, simulates a PX4 drone (x500) with onboard sensors, and exposes their readings as ROS2 topics via a bridge — all orchestrated with Docker.
 
-## Componentes
+## Components
 
-- **`gz_procedural_worlds/`** (submódulo) — Generador de mundos procedurales para Gazebo a partir de configs YAML: define área, zona de spawn, obstáculos (árboles, personas, muros, etc.) e iluminación, y comprueba la conectividad entre el punto de inicio y los objetivos. Incluye además el submódulo `px4-sitl-docker-sim`, que provee el contenedor con PX4 SITL + Gazebo Harmonic + ROS2.
-- **`gz_custom_models/`** (submódulo) — Modelos SDF personalizados para el simulador. Actualmente incluye una variante del x500 con sensores de distancia; se prevé añadir modelos con sensores adicionales (cámaras, IMU externas, etc.) a medida que el proyecto evolucione.
-- **`config/`** — Plantilla de configuración del `ros_gz_bridge` que mapea los topics de los sensores del dron de Gazebo a ROS2.
-- **`docker/`** — Dockerfile del contenedor del bridge (ROS2 Humble + `ros_gz_bridge`).
-- **`scripts/run_simulation.sh`** — Script principal: construye las imágenes Docker necesarias, genera el mundo, lanza el simulador y el bridge, y los mantiene corriendo hasta que se interrumpa.
+- **`gz_procedural_worlds/`** (submodule) — Procedural world generator for Gazebo driven by YAML configs: defines the area, spawn zone, obstacles (trees, people, walls, etc.) and lighting, and validates connectivity between the start point and the goals. It also includes the `px4-sitl-docker-sim` submodule, which provides the container with PX4 SITL + Gazebo Harmonic + ROS2.
+- **`gz_custom_models/`** (submodule) — Custom SDF models for the simulator. Currently includes an x500 variant with distance sensors; additional sensor configurations (cameras, external IMUs, etc.) are expected to be added as the project evolves.
+- **`config/`** — `ros_gz_bridge` config template that maps drone sensor topics from Gazebo into ROS2.
+- **`docker/`** — Dockerfile for the bridge container (ROS2 Humble + `ros_gz_bridge`).
+- **`scripts/run_simulation.sh`** — Main entrypoint: builds the required Docker images, generates the world, launches the simulator and the bridge, and keeps them running until interrupted.
 
-## Uso rápido
+## Quick start
 
 ```bash
 git submodule update --init --recursive
 ./scripts/run_simulation.sh --config gz_procedural_worlds/configs/default.yaml
 ```
 
-Topics ROS2 expuestos: `/rangefinder/front`, `/rangefinder/back`, `/rangefinder/left`, `/rangefinder/right`.
+## Requirements
 
-## Requisitos
-
-- Docker + NVIDIA Container Toolkit (renderizado GPU)
-- X11 (simulación con interfaz gráfica)
+- Docker + NVIDIA Container Toolkit (GPU rendering)
+- X11 (graphical simulation interface)
