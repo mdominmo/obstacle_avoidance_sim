@@ -1,6 +1,0 @@
-[submodule "gz_procedural_worlds"]
-	path = gz_procedural_worlds
-	url = https://github.com/mdominmo/gz_procedural_worlds.git
-[submodule "gz_custom_models"]
-	path = gz_custom_models
-	url = https://github.com/mdominmo/gz_custom_models.git

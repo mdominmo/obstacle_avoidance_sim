@@ -5,7 +5,7 @@
   direction: GZ_TO_ROS
 
 - gz_topic_name: "/world/${WORLD_NAME}/model/${GZ_MODEL_INSTANCE}/link/rangefinder_back_link/sensor/rangefinder_back/scan"
-  ros_topic_name: "/rangefinder/back"
+  ros_topic_name: "/rangefinder/rear"
   ros_type_name: "sensor_msgs/msg/LaserScan"
   gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS

@@ -4,9 +4,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-GZ_PROC_DIR="$REPO_ROOT/gz_procedural_worlds"
-SIM_DIR="$GZ_PROC_DIR/px4-sitl-docker-sim"
-CUSTOM_MODELS_DIR="$REPO_ROOT/gz_custom_models/models"
+GZ_PROCEDURAL_WORLDS_DIR="${GZ_PROCEDURAL_WORLDS_DIR:-$REPO_ROOT/../gz_procedural_worlds}"
+GZ_CUSTOM_MODELS_DIR="${GZ_CUSTOM_MODELS_DIR:-$REPO_ROOT/../gz_custom_models}"
+PX4_SITL_DOCKER_SIM_DIR="${PX4_SITL_DOCKER_SIM_DIR:-$REPO_ROOT/../px4-sitl-docker-sim}"
+CUSTOM_MODELS_DIR="$GZ_CUSTOM_MODELS_DIR/models"
 OUTPUT_DIR="$REPO_ROOT/output"
 
 SIM_IMAGE="px4_sitl_docker_sim"
@@ -22,20 +23,27 @@ CONFIG=""
 SEED=""
 MODEL="x500_4rangefinders"
 AUTOSTART="4001"
+VEHICLES="1"
 REBUILD=false
 
 # ─── Usage ───────────────────────────────────────────────────────────────────
 
 usage() {
-    echo "Usage: $0 --config <yaml> [--seed N] [--model MODEL] [--autostart ID]"
+    echo "Usage: $0 --config <yaml> [--seed N] [--model MODEL] [--autostart ID] [--vehicles N]"
     echo ""
     echo "Options:"
     echo "  --config, -c      World config file (required). E.g.: gz_procedural_worlds/configs/default.yaml"
     echo "  --seed, -s        Random seed override"
     echo "  --model, -m       Drone model name (default: x500_4rangefinders)"
     echo "  --autostart, -a   PX4 SYS_AUTOSTART (default: 4001)"
+    echo "  --vehicles, -n    Number of vehicles to spawn (default: 1)"
     echo "  --rebuild          Force rebuild all Docker images"
     echo "  --help, -h        Show this help"
+    echo ""
+    echo "NOTE: the rangefinder ROS2 bridge only covers vehicle 1 (GZ_MODEL_INSTANCE"
+    echo "is hardcoded to \${MODEL}_1, and /rangefinder/* topic names aren't"
+    echo "vehicle-namespaced) - with --vehicles > 1, OAS obstacle avoidance data is"
+    echo "only wired up for the first vehicle today."
 }
 
 # ─── Argument Parsing ────────────────────────────────────────────────────────
@@ -46,6 +54,7 @@ while [[ $# -gt 0 ]]; do
         --seed|-s)      SEED="$2"; shift 2 ;;
         --model|-m)     MODEL="$2"; shift 2 ;;
         --autostart|-a) AUTOSTART="$2"; shift 2 ;;
+        --vehicles|-n)  VEHICLES="$2"; shift 2 ;;
         --rebuild)      REBUILD=true; shift ;;
         --help|-h)      usage; exit 0 ;;
         *)              echo "Unknown argument: $1"; usage; exit 1 ;;
@@ -101,22 +110,21 @@ if ! docker info 2>/dev/null | grep -q "Runtimes.*nvidia\|nvidia-container"; the
     echo "Warning: nvidia-container-toolkit may not be installed. GPU passthrough might fail."
 fi
 
-if [[ ! -f "$GZ_PROC_DIR/src/gz_procedural_worlds/__init__.py" ]]; then
-    echo "Error: gz_procedural_worlds submodule not initialized."
-    echo "Run: git submodule update --init --recursive"
+if [[ ! -f "$GZ_PROCEDURAL_WORLDS_DIR/src/gz_procedural_worlds/__init__.py" ]]; then
+    echo "Error: gz_procedural_worlds not found at $GZ_PROCEDURAL_WORLDS_DIR."
+    echo "Run: ./setup.sh (or set GZ_PROCEDURAL_WORLDS_DIR to an existing checkout)"
+    exit 1
+fi
+
+if [[ ! -f "$PX4_SITL_DOCKER_SIM_DIR/scripts/run_docker.sh" ]]; then
+    echo "Error: px4-sitl-docker-sim not found at $PX4_SITL_DOCKER_SIM_DIR."
+    echo "Run: ./setup.sh (or set PX4_SITL_DOCKER_SIM_DIR to an existing checkout)"
     exit 1
 fi
 
 if [[ ! -f "$CUSTOM_MODELS_DIR/$MODEL/model.sdf" ]]; then
     echo "Error: model '$MODEL' not found at $CUSTOM_MODELS_DIR/$MODEL/"
     exit 1
-fi
-
-# ─── Extract gz_assets ───────────────────────────────────────────────────────
-
-if [[ ! -d "$SIM_DIR/gz_assets" ]]; then
-    echo "Extracting gz_assets.zip..."
-    (cd "$SIM_DIR" && unzip -o gz_assets.zip)
 fi
 
 # ─── Build Images ────────────────────────────────────────────────────────────
@@ -131,16 +139,12 @@ fi
 
 if ! docker image inspect "$SIM_IMAGE" &>/dev/null; then
     echo "Building $SIM_IMAGE (this takes a while on first run)..."
-    docker build \
-        --build-arg UID="$(id -u)" \
-        --build-arg GID="$(id -g)" \
-        -t "$SIM_IMAGE" \
-        "$SIM_DIR"
+    "$PX4_SITL_DOCKER_SIM_DIR/scripts/build_docker.sh"
 fi
 
 if ! docker image inspect "$WORLDGEN_IMAGE" &>/dev/null; then
     echo "Building $WORLDGEN_IMAGE..."
-    docker build -t "$WORLDGEN_IMAGE" -f "$GZ_PROC_DIR/Dockerfile.worldgen" "$GZ_PROC_DIR"
+    docker build -t "$WORLDGEN_IMAGE" -f "$GZ_PROCEDURAL_WORLDS_DIR/Dockerfile.worldgen" "$GZ_PROCEDURAL_WORLDS_DIR"
 fi
 
 if ! docker image inspect "$BRIDGE_IMAGE" &>/dev/null; then
@@ -158,7 +162,7 @@ mkdir -p "$OUTPUT_DIR"
 CONFIG_DIR="$(dirname "$CONFIG_ABSPATH")"
 CONFIG_FILE="$(basename "$CONFIG_ABSPATH")"
 
-GEN_ARGS="generate --config /configs/$CONFIG_FILE --output-dir /output --no-sync"
+GEN_ARGS="generate --config /configs/$CONFIG_FILE --output-dir /output"
 [[ -n "$SEED" ]] && GEN_ARGS="$GEN_ARGS --seed $SEED"
 
 docker run --rm \
@@ -188,25 +192,6 @@ if [[ ! -f "$WORLD_SDF" ]]; then
     exit 1
 fi
 
-# ─── Copy Assets to gz_assets ────────────────────────────────────────────────
-
-echo ""
-echo "=== Preparing assets ==="
-
-cp "$WORLD_SDF" "$SIM_DIR/gz_assets/worlds/"
-echo "  Copied world: $WORLD_NAME.sdf → gz_assets/worlds/"
-
-cp -r "$CUSTOM_MODELS_DIR/$MODEL" "$SIM_DIR/gz_assets/models/"
-echo "  Copied model: $MODEL → gz_assets/models/"
-
-for model_dir in "$GZ_PROC_DIR/models"/*/; do
-    if [[ -d "$model_dir" ]]; then
-        model_name="$(basename "$model_dir")"
-        cp -r "$model_dir" "$SIM_DIR/gz_assets/models/"
-        echo "  Copied obstacle model: $model_name → gz_assets/models/"
-    fi
-done
-
 # ─── Render Bridge Config ────────────────────────────────────────────────────
 
 echo ""
@@ -225,25 +210,15 @@ echo "  Bridge config: $OUTPUT_DIR/bridge_config.yaml"
 echo ""
 echo "=== Starting simulator ==="
 
-xhost +local:docker
+export GZ_IP=127.0.0.1
+export GZ_PARTITION=oa_sim
 
-docker run -d --name "$SIM_CONTAINER" \
-    --network host \
-    --ipc=host \
-    --gpus all \
-    -e DISPLAY="$DISPLAY" \
-    -e NVIDIA_VISIBLE_DEVICES=all \
-    -e NVIDIA_DRIVER_CAPABILITIES=all \
-    -e __NV_PRIME_RENDER_OFFLOAD=1 \
-    -e __GLX_VENDOR_LIBRARY_NAME=nvidia \
-    -e GZ_IP=127.0.0.1 \
-    -e GZ_PARTITION=oa_sim \
-    -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-    -v "$HOME/.Xauthority:/home/dev/.Xauthority:ro" \
-    -v "$SIM_DIR/gz_assets/models:/workspace/px4_sitl_docker_sim/gz_assets/models" \
-    -v "$SIM_DIR/gz_assets/worlds:/workspace/px4_sitl_docker_sim/gz_assets/worlds" \
-    "$SIM_IMAGE" \
-    --model "$MODEL" --autostart "$AUTOSTART" --world "$WORLD_NAME"
+"$PX4_SITL_DOCKER_SIM_DIR/scripts/run_docker.sh" \
+    --detach --name "$SIM_CONTAINER" \
+    --model "$MODEL" --autostart "$AUTOSTART" --world "$WORLD_NAME" --vehicles "$VEHICLES" \
+    --extra-assets "$OUTPUT_DIR" \
+    --extra-assets "$CUSTOM_MODELS_DIR" \
+    --extra-assets "$GZ_PROCEDURAL_WORLDS_DIR/models"
 
 echo "Simulator container started: $SIM_CONTAINER"
 echo "Waiting for Gazebo + PX4 to initialize (~25s)..."
@@ -266,11 +241,16 @@ echo "Bridge container started: $BRIDGE_CONTAINER"
 echo ""
 echo "=== Simulation running ==="
 echo ""
-echo "ROS2 topics available:"
+echo "ROS2 topics available (vehicle 1 only):"
 echo "  /rangefinder/front"
-echo "  /rangefinder/back"
+echo "  /rangefinder/rear"
 echo "  /rangefinder/left"
 echo "  /rangefinder/right"
+if [[ "$VEHICLES" != "1" ]]; then
+    echo ""
+    echo "NOTE: --vehicles $VEHICLES spawned, but the rangefinder bridge only"
+    echo "covers vehicle 1 - vehicles 2..$VEHICLES have no OAS sensor data yet."
+fi
 echo ""
 echo "Press Ctrl+C to stop."
 
